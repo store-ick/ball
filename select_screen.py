@@ -146,9 +146,9 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
                          color=T.INK_3, topleft=(inner_x, y + 184))
         return
 
-    list_top = y + 96
-    list_bottom = height - T.HINT_H - DESC_RESERVE
-    visible = max(1, (list_bottom - list_top + ROW_GAP) // ROW_STEP)
+    area_top = y + 96
+    area_bottom = height - T.HINT_H - 20
+    visible = max(1, (area_bottom - area_top + ROW_GAP) // ROW_STEP)
 
     # 滚动：保证选中的那个永远看得见
     col.offset = max(0, min(col.offset, max(0, len(col.roster) - visible)))
@@ -157,11 +157,19 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
     elif col.index >= col.offset + visible:
         col.offset = col.index - visible + 1
 
+    shown = min(len(col.roster), visible)
+    cur = col.current
+    desc_lines = _wrap(cur.desc, T.S_BODY, inner_w) if (cur and cur.desc) else []
+    desc_h = (22 + 27 * len(desc_lines)) if desc_lines else 0
+
+    # ★ 整块内容垂直居中。
+    #   手机屏幕又长又窄（比如 1080x2400），顶头排版会在下面留一大片空白，
+    #   看着很别扭。把所有内容量出来后居中放。
+    list_top = area_top + max(0, (area_bottom - area_top - shown * ROW_STEP - desc_h) // 2)
+
     col.row_rects = []
-    for k in range(visible):
+    for k in range(shown):
         idx = col.offset + k
-        if idx >= len(col.roster):
-            break
         ball = col.roster[idx]
         rect = (inner_x, list_top + k * ROW_STEP, inner_w, ROW_H)
         col.row_rects.append(rect)
@@ -175,14 +183,12 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
                   hovered=(hover_index == idx and idx != col.index))
 
     # 选中球的描述：紧跟在列表下面
-    cur = col.current
-    if cur and cur.desc:
-        desc_y = min(list_top + min(len(col.roster), visible) * ROW_STEP + 22,
-                     height - T.HINT_H - 26)
+    if desc_lines:
+        desc_y = list_top + shown * ROW_STEP + 22
         pygame.draw.line(screen, T.RULE, (inner_x, desc_y - 13),
                          (inner_x + inner_w, desc_y - 13), 1)
         ty = desc_y
-        for line in _wrap(cur.desc, T.S_BODY, inner_w):
+        for line in desc_lines:
             render.draw_text(screen, line, size=T.S_BODY, color=T.INK_2,
                              topleft=(inner_x, ty))
             ty += 27

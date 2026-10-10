@@ -25,7 +25,17 @@ import config as config_mod
 import paths
 import render
 import select_screen
+import theme
 from panel import Panel
+
+# 游戏里右下角的「重开」按钮
+RESTART_BTN_W, RESTART_BTN_H = 150, 54
+
+
+def restart_button_rect(width: int, height: int) -> tuple:
+    """手机上没有 R 键，给个能点的。桌面用鼠标点也一样 —— 所以两边都画，不判断平台。"""
+    return (width - RESTART_BTN_W - 20, height - RESTART_BTN_H - 20,
+            RESTART_BTN_W, RESTART_BTN_H)
 
 
 def _fatal(message: str) -> None:
@@ -106,6 +116,13 @@ def render_frame(screen, panels, game_cfg):
     for panel in panels:
         panel.draw(screen)
 
+    # 右下角的重开按钮：点一下回选球界面（等于按 R）
+    rect = restart_button_rect(width, height)
+    pygame.draw.rect(screen, (255, 255, 255), rect)
+    pygame.draw.rect(screen, (10, 10, 10), rect, 2)
+    render.draw_text(screen, "重开", size=26, color=(10, 10, 10),
+                     center=(rect[0] + rect[2] // 2, rect[1] + rect[3] // 2))
+
     text = _winner_text(panels)
     if text:
         render.draw_text(screen, text, size=40, color=(200, 30, 30),
@@ -138,6 +155,9 @@ async def play_one_round(screen, game_cfg, clock, active) -> str:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if theme.in_rect(event.pos, restart_button_rect(*screen.get_size())):
+                    return "restart"
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return "quit"
