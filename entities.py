@@ -43,11 +43,14 @@ class Ball:
         gravity_mult   重力倍率（乘在全局重力上）
     """
 
-    def __init__(self, cfg, radius: float):
+    def __init__(self, cfg, radius: float, randomness: float = 0.0):
         self.cfg = cfg
         self.radius = float(radius)
+        self.randomness = float(randomness)
         self.color = tuple(cfg.color)
         self.ops = list(cfg.ops)
+        # 出生时掷的"性格"（见 respawn）
+        self.speed_jitter = 1.0
 
         self.x = 0.0
         self.y = 0.0
@@ -66,14 +69,31 @@ class Ball:
         self.gravity_mult = 1.0
 
     def respawn(self, x: float, y: float) -> None:
-        """回到出生点，并且把被算子改过的属性全部复位。"""
+        """回到出生点，并把被算子改过的属性全部复位。
+
+        ★ 同时在这里掷一次这个球的"性格"：
+          几个球的物理参数如果完全一样，哪怕方向随机，两边的**节奏**也是一样的
+          （同时弹起、同时落杠），看着像镜像，很呆板。
+
+          所以出生时给每个球随机扰动一下反弹力度和横向速度，之后**整局固定**：
+            - 两个球各有各的规律，永远不同步 ✓ 看着就有"混乱感"
+            - 但每个球内部还是干净的抛物线 ✓ 不会像卡顿
+
+        randomness = 0 就退回完全确定的老行为。
+        """
+        r = self.randomness
+        jitter = (lambda: random.uniform(1.0 - r, 1.0 + r)) if r > 0 else (lambda: 1.0)
+
         self.x = float(x)
         self.y = float(y)
         self.vx = 0.0                   # 开局竖直下落，横向速度留到第一次弹跳才给
         self.vy = 0.0
         self.first_bounce = True
         self.damage = bignum.ceil_int(bignum.parse(self.cfg.base_damage))
-        self.bounce = float(self.cfg.bounce_speed)
+        # 反弹力度 —— 决定弹多高。这条最管用：高度不同就不会同时落杠
+        self.bounce = float(self.cfg.bounce_speed) * jitter()
+        # 横向速度的倍率 —— 决定横着跑多快
+        self.speed_jitter = jitter()
         self.gravity_mult = 1.0
 
     def bounce_off(self) -> None:
@@ -90,4 +110,6 @@ class Ball:
             self.first_bounce = False
             speed = float(self.cfg.speed_x)
             if speed:
-                self.vx = abs(speed) * self.scale_x * random.choice((-1, 1))
+                # 方向左右随机，速度大小带上出生时掷的那个倍率
+                self.vx = (abs(speed) * self.speed_jitter * self.scale_x
+                           * random.choice((-1, 1)))

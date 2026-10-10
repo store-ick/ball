@@ -87,6 +87,9 @@ class GlobalCfg:
     resizable: bool = True          # 窗口能不能拖大小
     header_ratio: float = 0.35      # 顶部信息区最多占屏高多少（窗口压很扁时兜底）
     scale_physics: bool = True      # 物理效果随窗口缩放（球半径 / 字体不缩放）
+    # ★ 随机扰动幅度：0 = 完全确定（各屏的球会像镜像一样同步），
+    #   0.15 = 轻微错开，0.4 以上就很疯。见 entities.Ball.respawn
+    randomness: float = 0.15
 
 
 @dataclass
@@ -177,6 +180,7 @@ def load(path: str) -> GameConfig:
         resizable=bool(g.get("resizable", GlobalCfg.resizable)),
         header_ratio=float(g.get("header_ratio", GlobalCfg.header_ratio)),
         scale_physics=bool(g.get("scale_physics", GlobalCfg.scale_physics)),
+        randomness=float(g.get("randomness", GlobalCfg.randomness)),
     )
 
     roster = _load_roster(path, glob.balls_file)

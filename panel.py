@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import random
+
 import pygame
 
 import bignum
@@ -30,7 +32,7 @@ class Panel:
         self.x, self.y, self.w, self.h = rect
 
         radius = cfg.ball.radius or glob.ball_radius
-        self.ball = Ball(cfg.ball, radius)
+        self.ball = Ball(cfg.ball, radius, glob.randomness)
         self.bars = []
 
         self.finished = False
@@ -54,8 +56,13 @@ class Panel:
         self.layout_bars()
         self.apply_scale()
 
-        # 出生点：顶部，横向位置由配置决定
-        start_x = self.x + self.w * min(max(self.cfg.ball.start_x, 0.0), 1.0)
+        # 出生点：顶部，横向位置由配置决定（randomness > 0 时再抖一点，
+        # 免得每屏的球都从同一条竖线上掉下来）
+        sx = min(max(self.cfg.ball.start_x, 0.0), 1.0)
+        r = self.glob.randomness
+        if r > 0:
+            sx = min(max(sx + random.uniform(-r * 0.35, r * 0.35), 0.05), 0.95)
+        start_x = self.x + self.w * sx
         start_y = self.y + self.ball.radius + 4
         self.ball.respawn(start_x, start_y)
 
