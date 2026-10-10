@@ -72,6 +72,28 @@ jobs:
           # cython 必须 < 3.0，3.x 移除了 p4a recipe 依赖的 longintrepr.h
           python3 -m pip install buildozer "cython==0.29.36"
 
+      # 排错用：把关键环境信息打出来。构建失败时把这一步的输出发我即可。
+      - name: 环境自检（失败时把这段发给开发者）
+        run: |
+          echo "===== pwd ====="
+          pwd
+          echo "===== 当前目录内容 ====="
+          ls -la
+          echo "===== 仓库根在哪 ====="
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE" | head -30
+          echo "===== buildozer.spec 在不在 ====="
+          ls -l buildozer.spec 2>&1 || echo "!! 当前目录没有 buildozer.spec"
+          ls -l "$GITHUB_WORKSPACE/buildozer.spec" 2>&1 || echo "!! 仓库根也没有 buildozer.spec"
+          echo "===== buildozer 装在哪 ====="
+          command -v buildozer || echo "!! PATH 里找不到 buildozer"
+          python3 -m pip show buildozer 2>&1 | head -5
+          echo "===== PATH ====="
+          echo "$PATH"
+          echo "===== python3 ====="
+          python3 --version
+          which python3
+
       - name: 构建 debug APK
         run: buildozer android debug
 
