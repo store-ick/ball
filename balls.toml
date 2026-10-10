@@ -1,0 +1,121 @@
+# =============================================================================
+#  球库 —— 所有能选的球都写在这
+# =============================================================================
+#
+#  开局会弹一个选球界面，把下面每个 [[ball]] 的 name 列出来让你挑。
+#  想加一颗新球，就往下面复制一段改改；只要 [[ball]] 下多一段，界面里就多一个选项。
+#
+#  字段说明（不写的就用默认值）：
+#      name         显示在左上角的名字，也是选择界面里列出来的名字
+#      desc         名字下面那行小字，选中时显示在选择界面里
+#      base_damage  开局伤害，支持大数 "1E100"
+#      bounce_speed 反弹力度（弹起高度 = v² / 2g）
+#      speed_x      横向速度的大小。开局是竖直下落的，第一次弹跳时才随机决定往左还是往右，
+#                   之后撞到左右屏幕壁才换向。写 0 = 永远只上下弹、不横着走。
+#      start_x      出生位置，0 = 最左，1 = 最右
+#      color        [r, g, b]
+#      radius       球的半径，不写就用全局的 ball_radius
+#      on_hit       撞击后触发的算子列表，球的"性格"全在这
+#
+#  可用的 op：
+#      内置（effects.py）：add_damage / mul_damage / set_damage
+#                          scale_bounce / set_bounce
+#                          set_gravity_mult / scale_gravity_mult
+#                          target_log / target_scale / target_add / target_set / annihilate
+#      自定义（custom_effects.py）：翻倍 / halve_target / hasten / parity_chaos …
+#
+#  自己写一个 op 就是在 custom_effects.py 里：
+#      from effects import register
+#      @register("名字")
+#      def 名字(ctx, **kw):
+#          ctx.ball.damage *= 2      # ctx 上有 ball / bar / panel 随便改
+#
+# =============================================================================
+
+
+# ── 加一球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "加一球"
+desc         = "每次撞击，攻击力 +1。越砸越猛，适合磨小数字。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [222, 58, 58]
+on_hit = [{ op = "add_damage", value = 1 }]
+
+
+# ── 1球 ────────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "1球"
+desc         = "伤害永远是 1，什么花招都没有。拿来当基准线。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [222, 58, 58]
+
+
+# ── 加亿球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "加亿球"
+desc         = "每次撞击，攻击力 +1E8。开局就能啃动千万级。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [222, 58, 58]
+on_hit = [{ op = "add_damage", value = "1E8" }]
+
+
+# ── 对数球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "对数球"
+desc         = "每次撞击，把横杠的数字取常用对数。1E10000 → 10000。专门治超大数。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [60, 120, 220]
+on_hit = [{ op = "target_log" }]
+
+
+# ── 反物质球 ────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "反物质球"
+desc         = "碰到的横杠直接湮灭，一路畅通无阻往下掉。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [90, 90, 90]
+on_hit = [{ op = "annihilate" }]
+
+
+# ── 翻倍球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "翻倍球"
+desc         = "每次撞击，攻击力 ×2。开局很弱，后面会失控。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [150, 60, 200]
+on_hit = [{ op = "翻倍" }]
+
+
+# ── 砍半球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "砍半球"
+desc         = "每次撞击，把横杠的数字砍一半。跟对数球是两种削法。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [40, 160, 120]
+on_hit = [{ op = "halve_target" }]
+
+
+# ── 虚空球 ──────────────────────────────────────────────────────────────────
+[[ball]]
+name         = "虚空球"
+desc         = "没有重力，撞一下就往上飘，弹到天荒地老。"
+base_damage  = 1
+bounce_speed = 900
+speed_x      = 300
+color        = [120, 120, 120]
+on_hit = [{ op = "set_gravity_mult", value = 0.0 },
+          { op = "add_damage", value = 1 }]
