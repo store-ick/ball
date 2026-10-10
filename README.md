@@ -296,6 +296,74 @@ bignum 的显示规则：十进制位数小于 10 就完整写（`1600000000`）
 比如 `1E10000 - 1` 还是 `1E10000`（差得太远，40 位精度里看不见）。这不是 bug，
 这正是"对数球"存在的意义 —— 先把数字拉下来，再慢慢磨。
 
+## 打包分享给别人
+
+打包配方在 **`ballgame.spec`** 里，一条命令就够：
+
+```bash
+pip install pyinstaller
+pyinstaller ballgame.spec
+```
+
+打出来的东西在 `dist/ballgame/`：
+
+```
+dist/ballgame/
+  ballgame.exe        ← 双击就能玩
+  game.toml           ← 配置就放在 exe 旁边
+  balls.toml
+  custom_effects.py
+  _internal/          ← PyInstaller 的内部文件，别动
+```
+
+把这个**文件夹整个压缩**发出去就行。
+
+### ⚠️ `ballgame.spec` 一定要提交到仓库
+
+它就是**打包配方** —— 哪两个 toml 要打进 exe 里，就是在它的 `datas` 里指定的：
+
+```python
+datas=[
+    ('balls.toml', '.'),
+    ('game.toml', '.'),
+],
+```
+
+别人 clone 下来直接 `pyinstaller ballgame.spec`，就能打出跟你一样、双击即玩的包。
+**要是把它忽略了，别人就得自己摸索怎么打包** —— 配哪些 `datas`、用 onefile 还是 onedir、
+要不要 `--windowed`、`name` 叫什么，全得重猜一遍。所以 `.gitignore` 里**不要**加 `*.spec`。
+
+同理 `game.toml`、`balls.toml`、`custom_effects.py` 也都是要提交的 ——
+它们是游戏内容本身（关卡数字、球库、算子），不是"本地配置"。
+真正不该提交的是 `dist/`、`build/`、`.venv/` 这些，`.gitignore` 里已经排除了。
+
+### 配置是怎么被找到的
+
+**两级查找**（`paths.py`）：
+
+```
+先看程序旁边（exe 所在目录 / 开发时是 .py 所在目录）
+  ├─ 有 -> 用这份            ← 使用者改了才生效
+  └─ 没有 -> 用打包进 exe 的那份（PyInstaller 解压到 _MEIPASS）
+```
+
+所以两种玩法都成立：
+
+- **朋友只是玩** —— 双击 exe，用打包进去的默认配置，开箱即用
+- **朋友想改** —— 把 `game.toml` / `balls.toml` 放到 exe 旁边，就覆盖掉内置的
+  （想改哪个放哪个；两个都想改就两个都放）
+
+**为什么要这么绕**：打包之后你的 `.py` 就不在你放 exe 的文件夹里了 ——
+onefile 运行时是先解压到一个临时目录再跑，`__file__` 指向那个临时目录；
+onedir 则是代码在 `_internal/` 里。所以"我的代码在哪"和"我旁边有什么文件"是两件事，
+`paths.py` 把它们分开了。
+
+同理，**`custom_effects.py` 也优先从 exe 旁边加载**，旁边没有才用打包进 exe 的默认示例 ——
+这样别人也能自己写算子（在这个文件里 `@register("名字")`，见上文）。
+
+spec 里 `console=False`，打包后没有控制台，`print` 没人看得见，所以出错时程序会
+**弹一个系统对话框**（见 `main.py` 的 `_fatal()`），不会"闪一下就没了"。
+
 ## 文件
 
 | 文件 | 作用 |
@@ -306,6 +374,7 @@ bignum 的显示规则：十进制位数小于 10 就完整写（`1600000000`）
 | `select_screen.py` | 开局的选球界面（鼠标 + 键盘） |
 | `bar_editor.py` | 横杠编辑器 |
 | `theme.py` | 界面配色和共用的绘制件 |
+| `paths.py` | 找文件的位置（兼容打包后） |
 | `config.py` | 读配置 + 读球库 |
 | `panel.py` | 一条赛道：物理 + 绘制 |
 | `entities.py` | `Ball` / `Bar` |

@@ -21,13 +21,58 @@ import pygame
 import bar_editor
 import bignum
 import config as config_mod
+import paths
 import render
 import select_screen
 from panel import Panel
 
 
-def _load_custom_effects():
-    """载入用户自己写的算子。写挂了只警告，不影响游戏跑起来。"""
+def _fatal(message: str) -> int:
+    """出错了：控制台印一份，打包后没控制台就再弹个窗。
+
+    （用 --windowed 打包的话 print 是没人看得见的，程序会"闪一下就没了"，
+    所以这种情况下补一个系统弹窗。）
+    """
+    print(message)
+    if paths.is_frozen():
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, message, "弹球 · 大数", 0x10)
+        except Exception:
+            pass
+    return 1
+
+
+def _exec_file_as_module(path: str, name: str) -> None:
+    """把一个具体的 .py 文件当模块加载并执行。
+
+    用来加载"程序旁边"的 custom_effects.py —— 打包之后 import 会找到
+    打包进 exe 的那份，而我们要的是外面那份。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"加载不了 {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module      # 先登记，模块内部互相引用时才找得到
+    spec.loader.exec_module(module)
+
+
+def _load_custom_effects() -> None:
+    """载入用户自己写的算子。写挂了只警告，不影响游戏跑起来。
+
+    打包发出去之后，别人也应该能自己加算子 —— 所以**优先加载程序旁边的
+    custom_effects.py**，旁边没有才用打包进 exe 的那份默认示例。
+    """
+    beside = os.path.join(paths.program_dir(), "custom_effects.py")
+    if paths.is_frozen() and os.path.exists(beside):
+        try:
+            _exec_file_as_module(beside, "custom_effects")
+            print(f"[info] 已从 {beside} 载入自定义算子")
+            return
+        except Exception as exc:
+            print(f"[warn] {beside} 载入失败，改用内置的那份：{exc}")
+
     try:
         import custom_effects  # noqa: F401
     except Exception as exc:  # pragma: no cover - 给用户看的兜底
@@ -112,19 +157,19 @@ def play_one_round(screen, game_cfg, clock, active) -> str:
 
 
 def main():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    cfg_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(base_dir, "game.toml")
+    cfg_path = sys.argv[1] if len(sys.argv) > 1 else paths.find_file("game.toml")
     cfg_path = os.path.abspath(cfg_path)
 
     if not os.path.exists(cfg_path):
-        print(f"找不到配置文件：{cfg_path}")
-        return 1
+        return _fatal(
+            f"找不到配置文件：\n{cfg_path}\n\n"
+            f"请把 game.toml 和 balls.toml 放在程序旁边（和 exe 同一个文件夹）。"
+        )
 
     try:
         game_cfg = config_mod.load(cfg_path)
     except Exception as exc:
-        print(f"配置读不了：{cfg_path}\n  {type(exc).__name__}: {exc}")
-        return 1
+        return _fatal(f"配置读不了：\n{cfg_path}\n\n{type(exc).__name__}: {exc}")
 
     bignum.FULL_DIGIT_LIMIT = game_cfg.glob.full_digit_limit
 

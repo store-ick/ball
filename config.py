@@ -33,6 +33,8 @@ import tomllib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+import paths
+
 DEFAULT_COLOR = (222, 58, 58)
 DEFAULT_BALLS_FILE = "balls.toml"
 
@@ -125,8 +127,11 @@ def _parse_ball(bd: Optional[dict]) -> BallCfg:
 
 
 def _load_roster(path: str, balls_file: str) -> List[BallCfg]:
-    """读球库文件。文件不存在就返回空球库（不报错，方便单屏写死球的配置）。"""
-    full = os.path.join(os.path.dirname(os.path.abspath(path)), balls_file)
+    """读球库文件。文件不存在就返回空球库（不报错，方便单屏写死球的配置）。
+
+    找的位置：关卡配置旁边 -> 程序旁边（exe 旁边）-> 打包进 exe 的那份。
+    """
+    full = paths.find_file(balls_file, os.path.dirname(os.path.abspath(path)))
     if not os.path.exists(full):
         return []
     with open(full, "rb") as fh:
