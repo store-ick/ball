@@ -10,15 +10,17 @@
 #    p4a 的那堆老配方在 Ubuntu 24.04 上会被新版 autoconf 判死：
 #      configure.ac:215: error: possibly undefined macro: LT_SYS_SYMBOL_USCORE
 #      autoreconf: error: /usr/bin/autoconf failed with exit status: 1
-#    而 runs-on 指定 ubuntu-22.04 现在已经不生效了（GitHub 只给 24.04）。
-#    所以干脆用容器把系统钉死在 22.04 —— 这样跟 p4a 的测试环境一致，
-#    顺便也把 Python 3.10 一起钉住了（22.04 自带的 python3 就是 3.10）。
+#    而 runs-on 指定 ubuntu-22.04 现在已经不生效（GitHub 只给 24.04）。
+#    所以用容器把系统钉死在 22.04 —— 跟 p4a 的测试环境一致，
+#    顺便把 Python 也钉在 3.10（22.04 自带的 python3 就是 3.10）。
+#
+#  ★ 容器里默认的 shell 是 dash，不是 bash！
+#    所以 `set -o pipefail` 这类 bash 语法会直接报 "Illegal option" 退出。
+#    需要 bash 的步骤要显式写 `shell: bash`。
 #
 #  用法：
-#    1. 推到 GitHub 仓库
-#    2. Actions 标签里看构建；首次 30~60 分钟，之后有缓存 10 分钟左右
-#    3. 跑完在 Artifacts 里下载 ballgame-apk
-#    4. 失败了也不要紧：日志会自动写进仓库的 build-error.md
+#    推到 GitHub → Actions 里看 → 跑完在 Artifacts 下载 ballgame-apk
+#    首次 30~60 分钟（要下 2GB NDK + 编译整个 Python），之后有缓存 10 分钟左右
 # =============================================================================
 
 name: 构建 APK
@@ -33,11 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:22.04   # ★ 系统钉死在 22.04，见文件头
     timeout-minutes: 150
-
-    # 失败时要把日志发成 Issue，所以需要 issue 写权限
-    permissions:
-      contents: write
-      issues: write
 
     steps:
       # 容器里没有 git，而 actions/checkout 需要它 —— 必须先装
@@ -76,35 +73,9 @@ jobs:
           python3 -m pip install buildozer "cython==0.29.36"
 
       - name: 构建 debug APK
-        id: build
-        continue-on-error: true      # 失败了也要往下走，好把日志存下来
-        shell: bash                  # ★ 容器里默认是 dash，不支持 pipefail，必须显式要 bash
-        run: |
-          set -o pipefail
-          buildozer android debug 2>&1 | tee /tmp/bz.log
-
-      # 构建日志默认只有仓库管理员能看（API 匿名读不到）。
-      # 所以失败时把关键部分发成一条 Issue —— Issue 是公开可读的，谁都能拿 API 看。
-      # （原来用"提交回仓库"的办法，但容器里 git 拿不到推权限，改成发 Issue 更稳。）
-      - name: 失败时把日志发成 Issue
-        if: steps.build.outcome == 'failure'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        # 具体逻辑在 .github/scripts/report_failure.py ——
-        # 不直接写在这里，因为 heredoc 的缩进会破坏 YAML（踩过这个坑）
-        run: python3 .github/scripts/report_failure.py
-
-      - name: 构建失败就报错退出
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "构建失败了，日志已发成 Issue"
-          exit 1
+        run: buildozer android debug
 
       - name: 上传 APK
-        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ballgame-apk
