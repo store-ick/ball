@@ -1,16 +1,24 @@
 # =============================================================================
-#  在 GitHub 的 Linux runner 上构建安卓 APK
+#  在 GitHub 的 Linux runner 上构建安卓 APK（跑在 Ubuntu 22.04 容器里）
 # =============================================================================
+#
 #  为什么放云端：Buildozer 只能在 Linux 上跑，而国内网络下 Android SDK/NDK
 #  （好几个 GB）和 python-for-android 基本下不动。GitHub 的 runner 在国外，
 #  这些都能正常下 —— 你只管推代码，回来拿 APK。
 #
+#  ★ 为什么要套一层容器（container: ubuntu:22.04）：
+#    p4a 的那堆老配方在 Ubuntu 24.04 上会被新版 autoconf 判死：
+#      configure.ac:215: error: possibly undefined macro: LT_SYS_SYMBOL_USCORE
+#      autoreconf: error: /usr/bin/autoconf failed with exit status: 1
+#    而 runs-on 指定 ubuntu-22.04 现在已经不生效了（GitHub 只给 24.04）。
+#    所以干脆用容器把系统钉死在 22.04 —— 这样跟 p4a 的测试环境一致，
+#    顺便也把 Python 3.10 一起钉住了（22.04 自带的 python3 就是 3.10）。
+#
 #  用法：
 #    1. 推到 GitHub 仓库
-#    2. 打开仓库的 Actions 标签，能看到这次构建
-#    3. 首次大概 30~60 分钟（要下 NDK 并编译整个 Python）
-#       之后有缓存，10 分钟左右
-#    4. 跑完在页面下方的 Artifacts 里下载 ballgame-apk
+#    2. Actions 标签里看构建；首次 30~60 分钟，之后有缓存 10 分钟左右
+#    3. 跑完在 Artifacts 里下载 ballgame-apk
+#    4. 失败了也不要紧：日志会自动写进仓库的 build-error.md
 # =============================================================================
 
 name: 构建 APK
@@ -23,34 +31,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120      # 首次构建很久，别让默认超时把任务掐了
+    container: ubuntu:22.04   # ★ 系统钉死在 22.04，见文件头
+    timeout-minutes: 150
 
     # 失败时要把日志写回仓库，所以要写权限
     permissions:
       contents: write
 
     steps:
+      # 容器里没有 git，而 actions/checkout 需要它 —— 必须先装
+      - name: 容器里先装 git
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - uses: actions/checkout@v4
-
-      # JDK 必须 17：21 会和 Android SDK 的构建工具冲突
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
 
       - name: 装系统依赖
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip autoconf automake libtool pkg-config \
+          apt-get install -y --no-install-recommends \
+            python3 python3-pip python3-venv \
+            openjdk-17-jdk-headless zip unzip \
+            autoconf automake libtool libtool-bin libltdl-dev \
+            gettext autopoint m4 pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev \
             cmake libffi-dev libssl-dev build-essential ccache
 
-      # SDK + NDK 加起来好几 GB，缓存住能给后续每次构建省掉十几分钟
+      # SDK + NDK 加起来好几个 GB，缓存住能给后续每次构建省掉十几分钟
       - name: 缓存 Buildozer 的 SDK/NDK
         uses: actions/cache@v4
         with:
@@ -63,9 +70,9 @@ jobs:
 
       - name: 装 buildozer
         run: |
-          python -m pip install --upgrade pip
+          python3 -m pip install --upgrade pip
           # cython 必须 < 3.0，3.x 移除了 p4a recipe 依赖的 longintrepr.h
-          pip install buildozer "cython==0.29.36"
+          python3 -m pip install buildozer "cython==0.29.36"
 
       - name: 构建 debug APK
         id: build
@@ -75,8 +82,8 @@ jobs:
           buildozer android debug 2>&1 | tee /tmp/bz.log
 
       # 构建日志默认只有仓库管理员能看（API 匿名读不到）。
-      # 所以失败时把尾巴写回仓库一个文件，这样谁都能通过公开 API 读到 —— 方便排查。
-      - name: 失败时把日志尾巴写回仓库
+      # 所以失败时把关键部分写回仓库一个文件，这样谁都能通过公开 API 读到 —— 方便排查。
+      - name: 失败时把日志写回仓库
         if: steps.build.outcome == 'failure'
         run: |
           {
@@ -84,8 +91,14 @@ jobs:
             echo ""
             echo "运行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo ""
+            echo "## 失败前的 300 行（能看出在编译哪个库）"
             echo '```'
-            tail -150 /tmp/bz.log
+            grep -n "" /tmp/bz.log | tail -300
+            echo '```'
+            echo ""
+            echo "## 所有报错行"
+            echo '```'
+            grep -n -i -B 3 -A 12 'error\|Traceback\|STDERR\|command not found' /tmp/bz.log | head -200
             echo '```'
           } > build-error.md
           git config user.name  "github-actions[bot]"
