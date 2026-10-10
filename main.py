@@ -166,8 +166,13 @@ async def _show_crash(text: str) -> None:
     显示完就一直停着，方便截图。
     """
     print(text, flush=True)
-    if sys.platform != "emscripten":
-        return                      # 桌面版：命令行里已经能看到，直接退出
+    # 桌面版：命令行里已经能看到，直接退出。
+    # 网页版和安卓上没控制台可看，必须画在屏幕上 —— 尤其安卓，闪退时
+    # 用户拿不到任何日志，这一屏是唯一的线索。
+    on_web = sys.platform == "emscripten"
+    on_android = "ANDROID_ARGUMENT" in os.environ
+    if not (on_web or on_android):
+        return
     try:
         if not pygame.get_init():
             pygame.init()
@@ -252,6 +257,23 @@ async def _main():
     flags = pygame.RESIZABLE if (game_cfg.glob.resizable and not on_mobile) else 0
     screen = pygame.display.set_mode(size, flags)
     clock = pygame.time.Clock()
+
+    # 手机上闪退是看不到任何信息的，所以先画两个"路标"：
+    #   屏幕变蓝   -> Python 起来了、显示也初始化了
+    #   出现"启动中" -> 中文字体加载成功
+    # 正常启动后会被游戏画面盖掉；要是停在这一屏，就知道后面哪一步崩了。
+    if on_mobile:
+        try:
+            screen.fill((70, 130, 200))
+            pygame.display.flip()
+        except Exception:
+            pass
+        try:
+            render.draw_text(screen, "启动中…", size=44, color=(255, 255, 255),
+                             center=(size[0] // 2, size[1] // 2))
+            pygame.display.flip()
+        except Exception:
+            pass
 
     picking = config_mod.needs_selection(game_cfg)
     # 要玩的屏的下标。选球界面里按 S 可以就地改成只留一屏。
