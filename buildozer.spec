@@ -48,4 +48,9 @@ p4a.bootstrap = sdl2
 
 [buildozer]
 log_level = 2
-warn_on_root = 1
+# ★ 必须写 0！
+#   CI 的容器里是 root 用户，buildozer 会弹一句
+#     "Buildozer is running as root! ... Are you sure you want to continue [y/n]?"
+#   然后等键盘输入 —— CI 里没有键盘，于是 EOFError 直接崩，构建 0 秒结束。
+#   写 0 就是关掉这个检查。
+warn_on_root = 0
