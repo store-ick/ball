@@ -25,8 +25,14 @@ source.exclude_dirs = .git,.github,.idea,dist,build,__pycache__,.venv,venv,webap
 
 version = 1.0.0
 
-# ★ 见文件头的说明：这组版本号是能编译通过的关键，别乱动
-requirements = python3==3.10.12,kivy==2.3.0,hostpython3==3.10.12,pyjnius==1.5.0,pygame
+# ★ 见文件头的说明：Python 和 Cython 的版本是能编译通过的关键，别乱动。
+#
+# 为什么没有 kivy / pyjnius：
+#   这游戏是纯 pygame，压根不用它们。之前照着旧攻略抄进来，
+#   结果 pyjnius==1.5.0（2022 年的版本）跟新版 Cython/setuptools 不兼容，
+#   报 "NameError: name 'PYX_FILES' is not defined" 直接把构建卡死。
+#   删掉之后少了两个又大又爱出毛病的依赖。
+requirements = python3==3.10.12,hostpython3==3.10.12,pygame
 
 orientation = portrait
 fullscreen = 1
