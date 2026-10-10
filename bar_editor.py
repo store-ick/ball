@@ -221,16 +221,30 @@ def draw_frame(screen, columns: List[_Column], active: int, width: int, height: 
                               height - T.HINT_H + T.HINT_H // 2))
 
 
-def run(screen, cfg: GameConfig) -> None:
-    """跑横杠编辑器。改的是 cfg.panels[i].bars 和 cfg.glob.bar_count，就地生效。"""
+def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> None:
+    """跑横杠编辑器。改的是 cfg.panels[i].bars 和 cfg.glob.bar_count，就地生效。
+
+    `active` 是要显示哪几屏（切了单屏就只显示那一屏）。条数是全局共用的，
+    所以增删行会影响所有屏，不只是显示出来的这些。
+    """
     g = cfg.glob
     size = screen.get_size()
     width, height = size
+    if active is None:
+        active = list(range(len(cfg.panels)))
 
-    columns: List[_Column] = []
-    for i, (pcfg, rect) in enumerate(zip(cfg.panels, config_mod.panel_rects(cfg, size))):
-        title = pcfg.title or ("左屏" if i == 0 else ("右屏" if i == 1 else f"第 {i + 1} 屏"))
-        columns.append(_Column(rect, title, pcfg.bars))
+    def titles_and_rects(size_):
+        rects = config_mod.panel_rects(cfg, size_, count=len(active))
+        out = []
+        for k, idx in enumerate(active):
+            pcfg = cfg.panels[idx]
+            title = pcfg.title or ("左屏" if idx == 0 else ("右屏" if idx == 1 else f"第 {idx + 1} 屏"))
+            out.append((title, pcfg, rects[k]))
+        return out
+
+    columns: List[_Column] = [
+        _Column(rect, title, pcfg.bars) for title, pcfg, rect in titles_and_rects(size)
+    ]
 
     active = 0
     clock = pygame.time.Clock()
@@ -251,7 +265,7 @@ def run(screen, cfg: GameConfig) -> None:
         if new_size != size:
             size = new_size
             width, height = size
-            for col, rect in zip(columns, config_mod.panel_rects(cfg, size)):
+            for col, rect in zip(columns, config_mod.panel_rects(cfg, size, count=len(active))):
                 col.rect = rect
             refresh_hover()
 

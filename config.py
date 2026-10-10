@@ -256,13 +256,15 @@ def window_size(cfg: GameConfig) -> Tuple[int, int]:
     return width, g.panel_height
 
 
-def panel_rects(cfg: GameConfig, size=None) -> List[Tuple[int, int, int, int]]:
+def panel_rects(cfg: GameConfig, size=None, count: int = None) -> List[Tuple[int, int, int, int]]:
     """算出每个面板在窗口里的像素矩形 (x, y, w, h)。
 
     传 size 就按那个尺寸算（窗口拖大拖小之后要重算），不传就用配置里的初始尺寸。
+    传 count 就按那么多屏来分（切单屏的时候用），不传就是全部屏。
     各屏宽度平均分，中间的竖线占掉固定宽度。
     """
-    n = len(cfg.panels)
+    n = len(cfg.panels) if count is None else count
+    n = max(1, n)
     g = cfg.glob
     if size is None:
         width, height = window_size(cfg)

@@ -68,17 +68,20 @@ def render_frame(screen, panels, game_cfg):
 def relayout_panels(screen, game_cfg, panels) -> tuple:
     """窗口被拖动了 -> 按新尺寸重排横杠，球按比例挪过去。返回新的尺寸。"""
     size = screen.get_size()
-    for panel, rect in zip(panels, config_mod.panel_rects(game_cfg, size)):
+    for panel, rect in zip(panels, config_mod.panel_rects(game_cfg, size, count=len(panels))):
         panel.relayout(rect)
     return size
 
 
-def play_one_round(screen, game_cfg, clock) -> str:
-    """跑一局。返回 "restart"（按了 R）或 "quit"（关窗口 / Esc）。"""
+def play_one_round(screen, game_cfg, clock, active) -> str:
+    """跑一局。`active` 是要玩的屏在 cfg.panels 里的下标（可能只切了一屏）。
+
+    返回 "restart"（按了 R）或 "quit"（关窗口 / Esc）。
+    """
     size = screen.get_size()
     panels = [
-        Panel(pcfg, rect, game_cfg.glob)
-        for pcfg, rect in zip(game_cfg.panels, config_mod.panel_rects(game_cfg, size))
+        Panel(game_cfg.panels[i], rect, game_cfg.glob)
+        for i, rect in zip(active, config_mod.panel_rects(game_cfg, size, count=len(active)))
     ]
     elapsed = 0.0
 
@@ -136,25 +139,30 @@ def main():
     clock = pygame.time.Clock()
 
     picking = config_mod.needs_selection(game_cfg)
+    # 要玩的屏的下标。选球界面里按 S 可以就地改成只留一屏。
+    active = list(range(len(game_cfg.panels)))
 
     while True:
         # ── 开局准备：选球 + 编横杠，来回切直到按 Enter 开打 ──
         if picking:
             while True:
-                action = select_screen.run(screen, game_cfg)
+                if not active:
+                    active = list(range(len(game_cfg.panels)))
+                # 切单屏的时候窗口会改尺寸，所以把 surface 接回来
+                screen, action = select_screen.run(screen, game_cfg, active)
                 if action is None:
                     pygame.quit()
                     return 0             # 按了 Esc
                 kind, chosen = action
                 if kind == "edit":
-                    bar_editor.run(screen, game_cfg)
+                    bar_editor.run(screen, game_cfg, active)
                     continue
-                for pcfg, ball in zip(game_cfg.panels, chosen):
+                for idx, ball in zip(active, chosen):
                     if ball is not None:
-                        pcfg.ball = ball
+                        game_cfg.panels[idx].ball = ball
                 break
 
-        result = play_one_round(screen, game_cfg, clock)
+        result = play_one_round(screen, game_cfg, clock, active)
         if result == "quit":
             break
         # "restart"：回到循环开头，需要选球就再弹一次
