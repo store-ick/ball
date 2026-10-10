@@ -25,6 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120      # 首次构建很久，别让默认超时把任务掐了
 
+    # 失败时要把日志写回仓库，所以要写权限
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -64,9 +68,41 @@ jobs:
           pip install buildozer "cython==0.29.36"
 
       - name: 构建 debug APK
-        run: buildozer android debug
+        id: build
+        continue-on-error: true      # 失败了也要往下走，好把日志存下来
+        run: |
+          set -o pipefail
+          buildozer android debug 2>&1 | tee /tmp/bz.log
+
+      # 构建日志默认只有仓库管理员能看（API 匿名读不到）。
+      # 所以失败时把尾巴写回仓库一个文件，这样谁都能通过公开 API 读到 —— 方便排查。
+      - name: 失败时把日志尾巴写回仓库
+        if: steps.build.outcome == 'failure'
+        run: |
+          {
+            echo "# 构建失败日志（自动生成，排查用）"
+            echo ""
+            echo "运行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo '```'
+            tail -150 /tmp/bz.log
+            echo '```'
+          } > build-error.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add build-error.md
+          # [skip ci] 很重要：不然这次提交又会触发一轮构建，无限循环
+          git commit -m "记录构建失败日志 [skip ci]" || true
+          git push
+
+      - name: 构建失败就报错退出
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "构建失败了，日志见 build-error.md"
+          exit 1
 
       - name: 上传 APK
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ballgame-apk
