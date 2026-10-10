@@ -29,9 +29,16 @@
 from __future__ import annotations
 
 import os
-import tomllib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    import tomllib                      # Python 3.11+ 自带
+except ModuleNotFoundError:
+    # Python 3.10 及以下没有 tomllib —— 安卓那边被 pygame 的 recipe 钉在 3.10，
+    # 少了这个包游戏会启动即崩（ModuleNotFoundError: No module named 'tomllib'）。
+    # tomli 是它的官方"前身"，Python 3.11 的 tomllib 就是照它做的，API 完全一样。
+    import tomli as tomllib
 
 import paths
 

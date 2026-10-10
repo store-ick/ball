@@ -32,7 +32,9 @@ version = 1.0.0
 #   结果 pyjnius==1.5.0（2022 年的版本）跟新版 Cython/setuptools 不兼容，
 #   报 "NameError: name 'PYX_FILES' is not defined" 直接把构建卡死。
 #   删掉之后少了两个又大又爱出毛病的依赖。
-requirements = python3==3.10.12,hostpython3==3.10.12,pygame
+# tomli：Python 3.10 没有 tomllib（3.11 才进标准库），得靠这个背锅包读 toml。
+#        它是纯 Python，p4a 直接从 PyPI 装，不需要 recipe。
+requirements = python3==3.10.12,hostpython3==3.10.12,pygame,tomli
 
 orientation = portrait
 fullscreen = 1
