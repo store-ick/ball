@@ -77,6 +77,7 @@ class GlobalCfg:
     balls_file: str = DEFAULT_BALLS_FILE
     resizable: bool = True          # 窗口能不能拖大小
     header_ratio: float = 0.35      # 顶部信息区最多占屏高多少（窗口压很扁时兜底）
+    scale_physics: bool = True      # 物理效果随窗口缩放（球半径 / 字体不缩放）
 
 
 @dataclass
@@ -163,6 +164,7 @@ def load(path: str) -> GameConfig:
         balls_file=str(g.get("balls_file", GlobalCfg.balls_file)),
         resizable=bool(g.get("resizable", GlobalCfg.resizable)),
         header_ratio=float(g.get("header_ratio", GlobalCfg.header_ratio)),
+        scale_physics=bool(g.get("scale_physics", GlobalCfg.scale_physics)),
     )
 
     roster = _load_roster(path, glob.balls_file)

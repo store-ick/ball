@@ -52,6 +52,7 @@ class Panel:
             for i, hp in enumerate(self.cfg.bars)
         ]
         self.layout_bars()
+        self.apply_scale()
 
         # 出生点：顶部，横向位置由配置决定
         start_x = self.x + self.w * min(max(self.cfg.ball.start_x, 0.0), 1.0)
@@ -79,21 +80,51 @@ class Panel:
         """顶部信息区留多高。窗口压得很扁时按比例收，免得横杠没地方放。"""
         return min(self.glob.header_height, self.h * self.glob.header_ratio)
 
+    # ------------------------------------------------------------------
+    # 随窗口缩放物理
+    # ------------------------------------------------------------------
+    def apply_scale(self):
+        """把"当前尺寸 / 配置里的初始尺寸"算成缩放系数挂到球上。
+
+        纵向量（重力、反弹力度）乘 scale_y，横向速度乘 scale_x。
+        这样横杠间距变大时球也弹得同样高，下落耗时在任何窗口下都一样
+        （落体 t = √(2d/g)，d 和 g 同比例放缩会抵消）。
+
+        球的半径、横杠厚度、字体不缩放。
+        """
+        if not self.glob.scale_physics:
+            sx = sy = 1.0
+        else:
+            ref_w = self.glob.panel_width or self.w
+            ref_h = self.glob.panel_height or self.h
+            sx = self.w / ref_w
+            sy = self.h / ref_h
+        self.ball.scale_x = sx
+        self.ball.scale_y = sy
+
     def relayout(self, rect):
         """窗口大小变了：换新矩形，横杠重新铺，球按比例挪过去。
 
-        球的半径、速度、重力都不动 —— 只有位置跟着缩放。
+        位置按比例缩放；速度也按新老系数换算一下，动作才是连着的。
+        球的半径、重力、反弹力度的"配置值"都不动 —— 它们只在用的时候乘缩放系数。
         """
         ox, oy, ow, oh = self.x, self.y, self.w, self.h
+        old_sx, old_sy = self.ball.scale_x, self.ball.scale_y
         self.x, self.y, self.w, self.h = rect
         if ow <= 0 or oh <= 0:
             return
 
-        sx, sy = self.w / ow, self.h / oh
-        self.ball.x = self.x + (self.ball.x - ox) * sx
-        self.ball.y = self.y + (self.ball.y - oy) * sy
+        kx, ky = self.w / ow, self.h / oh
+        self.ball.x = self.x + (self.ball.x - ox) * kx
+        self.ball.y = self.y + (self.ball.y - oy) * ky
 
         self.layout_bars()
+        self.apply_scale()
+
+        if old_sx > 0 and old_sy > 0:
+            self.ball.vx *= self.ball.scale_x / old_sx
+            self.ball.vy *= self.ball.scale_y / old_sy
+
         self._clamp_ball()
 
     def _clamp_ball(self):
@@ -111,7 +142,8 @@ class Panel:
             return
 
         ball = self.ball
-        gravity = self.glob.gravity * ball.gravity_mult
+        # 重力也带上窗口缩放系数：窗口变高，重力跟着变强，弹跳高度占比才不变
+        gravity = self.glob.gravity * ball.gravity_mult * ball.scale_y
 
         # 分小步推进，避免球从高处落下时穿过横杠
         speed = max(abs(ball.vx), abs(ball.vy))

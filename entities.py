@@ -54,6 +54,13 @@ class Ball:
         self.vx = 0.0
         self.vy = 0.0
         self.first_bounce = True        # 还没弹过 -> 开局竖直下落
+
+        # 窗口缩放系数，由所属的 Panel 维护：
+        #   scale_y 乘在重力和反弹力度上，scale_x 乘在横向速度上。
+        #   配置里关掉"随窗口缩放物理"就恒为 1.0。
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+
         self.damage: Decimal = bignum.ceil_int(bignum.parse(cfg.base_damage))
         self.bounce = float(cfg.bounce_speed)
         self.gravity_mult = 1.0
@@ -78,9 +85,9 @@ class Ball:
 
         `speed_x = 0` 表示这颗球永远只上下弹，不横向走。
         """
-        self.vy = -self.bounce
+        self.vy = -self.bounce * self.scale_y
         if self.first_bounce:
             self.first_bounce = False
             speed = float(self.cfg.speed_x)
             if speed:
-                self.vx = abs(speed) * random.choice((-1, 1))
+                self.vx = abs(speed) * self.scale_x * random.choice((-1, 1))
