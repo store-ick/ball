@@ -159,7 +159,8 @@ async def play_one_round(screen, game_cfg, clock, active) -> str:
                 if theme.in_rect(event.pos, restart_button_rect(*screen.get_size())):
                     return "restart"
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+                # K_AC_BACK 是安卓的系统返回键：在游戏里按返回 = 退出（安卓的习惯）
+                if event.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                     return "quit"
                 if event.key == pygame.K_r:
                     return "restart"

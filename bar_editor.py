@@ -105,6 +105,16 @@ def del_button_rect(width: int, height: int) -> tuple:
     return (x + w + 10, y, 132, h)
 
 
+def back_button_rect(width: int, height: int) -> tuple:
+    """右下角的「返回」。
+
+    原来这里只能按 Esc 退出 —— 手机上没键盘，等于进了这个页面就出不去。
+    桌面也画（鼠标点一样用），所以不判断平台。
+    """
+    y = height - T.HINT_H + (T.HINT_H - BTN_H) // 2
+    return (width - T.PAD - 146, y, 146, BTN_H)
+
+
 def _apply_count(cfg: GameConfig, delta: int) -> None:
     """加减横杠条数。左右共用，所以两边一起变。"""
     panels = cfg.panels
@@ -166,7 +176,7 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
 
 def draw_frame(screen, columns: List[_Column], active: int, width: int, height: int,
                mouse_pos=(0, 0), hover_rows=None, hover_add: bool = False,
-               hover_del: bool = False) -> None:
+               hover_del: bool = False, hover_back: bool = False) -> None:
     screen.fill(T.PAPER)
 
     # 竖线宽度 = 相邻两列之间实际留出的空隙（跟着窗口走）
@@ -180,15 +190,17 @@ def draw_frame(screen, columns: List[_Column], active: int, width: int, height: 
         hover = hover_rows[i] if hover_rows else None
         _draw_column(screen, col, i == active, height, hover)
 
-    T.hint_bar(screen, width, height,
-               "点一行改数字      ↑↓ 换行      Tab 换屏      Esc 返回")
+    T.hint_bar(screen, width, height, "")      # 只画那条分隔线
 
     T.button(screen, add_button_rect(width, height), "+ 加一根", hovered=hover_add)
-    T.button(screen, del_button_rect(width, height), "− 删一根", hovered=hover_del)
-    render.draw_text(screen, "左右共用", size=T.S_CAPTION, color=T.INK_3,
+    # 注意：这里用 ASCII 的 "-"，别用 U+2212（−）。
+    # 打包字体 simhei 里没有 U+2212，会渲染成一个方框。
+    T.button(screen, del_button_rect(width, height), "- 删一根", hovered=hover_del)
+    render.draw_text(screen, "左右共用 · 点一行改数字", size=T.S_CAPTION, color=T.INK_3,
                      midleft=(del_button_rect(width, height)[0]
                               + del_button_rect(width, height)[2] + 14,
                               height - T.HINT_H + T.HINT_H // 2))
+    T.button(screen, back_button_rect(width, height), "返回", hovered=hover_back)
 
 
 async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> None:
@@ -220,14 +232,15 @@ async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> No
     clock = pygame.time.Clock()
     mouse_pos = (0, 0)
     hover_rows: List[Optional[int]] = [None] * len(columns)
-    hover_add = hover_del = False
+    hover_add = hover_del = hover_back = False
 
     def refresh_hover() -> None:
-        nonlocal hover_add, hover_del
+        nonlocal hover_add, hover_del, hover_back
         for i, col in enumerate(columns):
             hover_rows[i] = col.row_at(mouse_pos)
         hover_add = T.in_rect(mouse_pos, add_button_rect(width, height))
         hover_del = T.in_rect(mouse_pos, del_button_rect(width, height))
+        hover_back = T.in_rect(mouse_pos, back_button_rect(width, height))
 
     while True:
         # 窗口被拖动了 -> 按新尺寸重算各列的位置
@@ -250,7 +263,9 @@ async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> No
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 mouse_pos = e.pos
                 refresh_hover()
-                if hover_add:
+                if hover_back:
+                    return
+                elif hover_add:
                     _apply_count(cfg, +1)
                 elif hover_del:
                     _apply_count(cfg, -1)
@@ -267,7 +282,8 @@ async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> No
 
             elif e.type == pygame.KEYDOWN:
                 col = columns[active]
-                if e.key == pygame.K_ESCAPE:
+                # K_AC_BACK 是安卓的系统返回键（桌面永远不会触发，写了也无害）
+                if e.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                     return
                 elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                     await _edit_row(screen, col, col.index)
@@ -283,7 +299,7 @@ async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> No
                 refresh_hover()
 
         draw_frame(screen, columns, active, width, height,
-                   mouse_pos, hover_rows, hover_add, hover_del)
+                   mouse_pos, hover_rows, hover_add, hover_del, hover_back)
         pygame.display.flip()
         clock.tick(g.fps)
         await asyncio.sleep(0)      # pygbag 必需：每帧让出控制权

@@ -329,7 +329,8 @@ async def run(screen, cfg: GameConfig, active: List[int]):
                         break
 
             elif e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE:
+                # K_AC_BACK 是安卓的系统返回键（桌面不会触发）
+                if e.key in (pygame.K_ESCAPE, pygame.K_AC_BACK):
                     return screen, None
                 if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                     return screen, ("play", [c.current for c in columns])
