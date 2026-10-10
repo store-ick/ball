@@ -93,41 +93,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          {
-            echo "构建失败：$RUN_URL"
-            echo ""
-            echo "## 失败前的 400 行（能看出在编译哪个库）"
-            echo '```'
-            tail -400 /tmp/bz.log 2>/dev/null || echo "(日志文件没生成 —— 说明失败得很早)"
-            echo '```'
-          } > /tmp/body.md
-          python3 - <<'PY'
-import json, os, urllib.request, urllib.error
-body = open("/tmp/body.md", encoding="utf-8", errors="replace").read()
-if len(body) > 60000:
-    body = body[:60000] + "\n...(太长，已截断)"
-title = "构建失败日志"
-payload = json.dumps({"title": title, "body": body}).encode()
-req = urllib.request.Request(
-    "https://api.github.com/repos/%s/issues" % os.environ["REPO"],
-    data=payload,
-    headers={"Authorization": "token " + os.environ["GH_TOKEN"],
-             "Accept": "application/vnd.github+json",
-             "Content-Type": "application/json"},
-)
-try:
-    r = urllib.request.urlopen(req)
-    print("Issue 已创建，状态码:", r.status)
-except Exception as e:
-    print("创建 Issue 失败:", e)
-    print(body[:3000])
-PY
+        # 具体逻辑在 .github/scripts/report_failure.py ——
+        # 不直接写在这里，因为 heredoc 的缩进会破坏 YAML（踩过这个坑）
+        run: python3 .github/scripts/report_failure.py
 
       - name: 构建失败就报错退出
         if: steps.build.outcome == 'failure'
         run: |
-          echo "构建失败了，日志见 build-error.md"
+          echo "构建失败了，日志已发成 Issue"
           exit 1
 
       - name: 上传 APK
