@@ -23,6 +23,7 @@ import pygame
 
 import bignum
 import config as config_mod
+import keypad
 import render
 import theme as T
 from config import GameConfig
@@ -33,7 +34,17 @@ IDX_W = 34          # 行号占的宽度
 BTN_H = 36
 ADD_DEFAULT = 10    # 新加一根的默认血量
 
-_ALLOWED = set("0123456789.eE+-^")
+
+async def _edit_row(screen, col: "_Column", idx: int) -> None:
+    """弹数字键盘改第 idx 根横杠的血量。
+
+    手机上没键盘，敲不了数字；桌面上也能用（还能直接打字，键盘组件两种输入都收）。
+    """
+    if not col.bars or not (0 <= idx < len(col.bars)):
+        return
+    text = await keypad.ask(screen, f"第 {idx + 1} 根横杠的血量", col.bars[idx])
+    if text is not None:
+        col.set_value(idx, text)
 
 
 class _Column:
@@ -52,62 +63,29 @@ class _Column:
 
         self.index = 0
         self.offset = 0
-        self.buffer: Optional[str] = None    # 非 None = 正在编辑
-        self.fresh = False                   # True = 还没动过，下一次按键替换整段
         self.row_rects: List[tuple] = []
 
-    @property
-    def editing(self) -> bool:
-        return self.buffer is not None
+    def set_value(self, idx: int, text: str) -> bool:
+        """把第 idx 根横杠的血量改成 text。
 
-    def begin_edit(self) -> None:
-        if self.bars:
-            self.buffer = str(self.bars[self.index])
-            self.fresh = True
-
-    def cancel_edit(self) -> None:
-        self.buffer = None
-        self.fresh = False
-
-    def commit_edit(self) -> None:
-        """把输入框里的东西写回去。解析不了（或者空了）就当作取消。"""
-        if self.buffer is None or not self.bars:
-            return
-        text = self.buffer.strip()
-        self.buffer = None
-        self.fresh = False
+        解析不了（比如手滑打成 abc）就原样保留、返回 False。
+        注意：手机上没键盘，输入是靠弹出的数字键盘（keypad.py），
+        原来是"点一行直接打字"，那个在手机上没法用。
+        """
+        text = (text or "").strip()
         if not text:
-            return
+            return False
         try:
             value = bignum.parse(text)
         except Exception:
-            return                    # 解析失败就保留原来的值
+            return False
         if value < 0:
             value = bignum.ZERO
-        self.bars[self.index] = bignum.fmt(value)
-
-    def type_char(self, ch: str) -> None:
-        """敲进一个字符。刚点开还没动过的话，第一个字符把旧值整个替换掉。"""
-        if not self.editing:
-            self.begin_edit()
-        if self.fresh:
-            self.buffer = ch
-            self.fresh = False
-        else:
-            self.buffer = (self.buffer or "") + ch
-
-    def backspace(self) -> None:
-        if not self.editing:
-            self.begin_edit()
-        if self.fresh:
-            self.buffer = ""
-            self.fresh = False
-        elif self.buffer:
-            self.buffer = self.buffer[:-1]
+        self.bars[idx] = bignum.fmt(value)
+        return True
 
     def move(self, delta: int) -> None:
         if self.bars:
-            self.commit_edit()
             self.index = (self.index + delta) % len(self.bars)
 
     def row_at(self, pos) -> Optional[int]:
@@ -176,11 +154,7 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
         bar_rect = (inner_x + IDX_W, ry, inner_w - IDX_W, ROW_H)
         selected = idx == col.index
         if selected and active:
-            if col.editing:
-                T.bar_row(screen, bar_rect, col.buffer, mode="edit",
-                          caret=True, size=T.S_BODY)
-            else:
-                T.bar_row(screen, bar_rect, col.bars[idx], mode="edit", size=T.S_BODY)
+            T.bar_row(screen, bar_rect, col.bars[idx], mode="edit", size=T.S_BODY)
         else:
             T.bar_row(screen, bar_rect, col.bars[idx], mode="filled", size=T.S_BODY,
                       hovered=(hover_index == idx))
@@ -206,13 +180,8 @@ def draw_frame(screen, columns: List[_Column], active: int, width: int, height: 
         hover = hover_rows[i] if hover_rows else None
         _draw_column(screen, col, i == active, height, hover)
 
-    editing = next((c for c in columns if c.editing), None)
-    if editing is not None:
-        hint = f"正在输入 {editing.buffer or '·'}    Enter 确认    Esc 取消"
-        T.hint_bar(screen, width, height, hint, accent=True)
-    else:
-        T.hint_bar(screen, width, height,
-                   "点一行改数字      Enter 确认      Tab 换屏      Esc 返回")
+    T.hint_bar(screen, width, height,
+               "点一行改数字      ↑↓ 换行      Tab 换屏      Esc 返回")
 
     T.button(screen, add_button_rect(width, height), "+ 加一根", hovered=hover_add)
     T.button(screen, del_button_rect(width, height), "− 删一根", hovered=hover_del)
@@ -282,55 +251,35 @@ async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> No
                 mouse_pos = e.pos
                 refresh_hover()
                 if hover_add:
-                    for col in columns:
-                        col.commit_edit()
                     _apply_count(cfg, +1)
                 elif hover_del:
-                    for col in columns:
-                        col.commit_edit()
                     _apply_count(cfg, -1)
                 else:
                     for i, col in enumerate(columns):
                         idx = col.row_at(e.pos)
                         if idx is not None:
-                            for c in columns:
-                                if c is not col:
-                                    c.commit_edit()
                             active = i
                             col.index = idx
-                            col.begin_edit()
+                            # 点一行就弹数字键盘改它（手机上没法打字）
+                            await _edit_row(screen, col, idx)
                             break
                 refresh_hover()
 
             elif e.type == pygame.KEYDOWN:
                 col = columns[active]
                 if e.key == pygame.K_ESCAPE:
-                    if col.editing:
-                        col.cancel_edit()
-                    else:
-                        for c in columns:
-                            c.commit_edit()
-                        return
-                elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    col.commit_edit()
-                    col.move(1)
-                elif e.key == pygame.K_BACKSPACE:
-                    col.backspace()
+                    return
+                elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                    await _edit_row(screen, col, col.index)
                 elif e.key in (pygame.K_UP, pygame.K_w):
                     col.move(-1)
                 elif e.key in (pygame.K_DOWN, pygame.K_s):
                     col.move(1)
                 elif e.key == pygame.K_TAB:
-                    col.commit_edit()
                     active = (active + 1) % len(columns)
                 elif e.key in (pygame.K_LEFT, pygame.K_RIGHT):
-                    col.commit_edit()
                     step = -1 if e.key == pygame.K_LEFT else 1
                     active = (active + step) % len(columns)
-                else:
-                    ch = getattr(e, "unicode", "")
-                    if ch and ch in _ALLOWED:
-                        col.type_char(ch)
                 refresh_hover()
 
         draw_frame(screen, columns, active, width, height,
