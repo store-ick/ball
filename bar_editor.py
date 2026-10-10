@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import List, Optional
 
 import pygame
@@ -221,7 +222,7 @@ def draw_frame(screen, columns: List[_Column], active: int, width: int, height: 
                               height - T.HINT_H + T.HINT_H // 2))
 
 
-def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> None:
+async def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> None:
     """跑横杠编辑器。改的是 cfg.panels[i].bars 和 cfg.glob.bar_count，就地生效。
 
     `active` 是要显示哪几屏（切了单屏就只显示那一屏）。条数是全局共用的，
@@ -336,3 +337,4 @@ def run(screen, cfg: GameConfig, active: Optional[List[int]] = None) -> None:
                    mouse_pos, hover_rows, hover_add, hover_del)
         pygame.display.flip()
         clock.tick(g.fps)
+        await asyncio.sleep(0)      # pygbag 必需：每帧让出控制权

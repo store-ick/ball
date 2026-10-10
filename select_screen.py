@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import List, Optional
 
 import pygame
@@ -187,12 +188,7 @@ def _draw_column(screen, col: _Column, active: bool, height: int,
             ty += 27
 
 
-def edit_button_rect(width: int, height: int) -> tuple:
-    return _button_rect(width, height, 0, 176)
-
-
-def solo_button_rect(width: int, height: int) -> tuple:
-    return _button_rect(width, height, 1, 176)
+BTN_W = 146
 
 
 def _button_rect(width: int, height: int, slot: int, w: int) -> tuple:
@@ -200,9 +196,23 @@ def _button_rect(width: int, height: int, slot: int, w: int) -> tuple:
     return (T.PAD + slot * (w + BTN_GAP), y, w, BTN_H)
 
 
+def edit_button_rect(width: int, height: int) -> tuple:
+    return _button_rect(width, height, 0, BTN_W)
+
+
+def solo_button_rect(width: int, height: int) -> tuple:
+    return _button_rect(width, height, 1, BTN_W)
+
+
+def start_button_rect(width: int, height: int) -> tuple:
+    """右下角的「开始游戏」—— 手机上没有回车键，得有个能点的。"""
+    y = height - T.HINT_H + (T.HINT_H - BTN_H) // 2
+    return (width - T.PAD - BTN_W, y, BTN_W, BTN_H)
+
+
 def draw_frame(screen, columns: List[_Column], active: int, width: int, height: int,
                mouse_pos=(0, 0), hover_rows=None, hover_btn=False,
-               hover_solo=False, solo: bool = False) -> None:
+               hover_solo=False, hover_start=False, solo: bool = False) -> None:
     """把选球界面整帧画出来（不处理输入，方便单测/复用）。"""
     screen.fill(T.PAPER)
 
@@ -220,21 +230,23 @@ def draw_frame(screen, columns: List[_Column], active: int, width: int, height: 
     T.hint_bar(screen, width, height, _hint_text(columns, solo))
 
     if any(c.selectable for c in columns):
-        T.button(screen, edit_button_rect(width, height), "编辑横杠  E", hovered=hover_btn)
+        T.button(screen, edit_button_rect(width, height), "编辑横杠", hovered=hover_btn)
     T.button(screen, solo_button_rect(width, height),
-             "改回双屏  S" if solo else "只看这屏  S", hovered=hover_solo)
+             "改回双屏" if solo else "只看这屏", hovered=hover_solo)
+    T.button(screen, start_button_rect(width, height), "开始游戏",
+             hovered=hover_start, primary=True)
 
 
 def _hint_text(columns, solo: bool) -> str:
     n = sum(1 for c in columns if c.selectable)
     if solo:
-        return "↑↓ 选择      S 改回双屏      Enter 开始      Esc 退出"
+        return "↑↓ 选择      S 改回双屏      E 编辑横杠"
     if n > 1:
-        return "↑↓ 选择      Tab 换屏      Enter 开始      Esc 退出"
-    return "↑↓ 选择      Enter 开始      Esc 退出"
+        return "↑↓ 选择      Tab 换屏      E 编辑横杠"
+    return "↑↓ 选择      E 编辑横杠"
 
 
-def run(screen, cfg: GameConfig, active: List[int]):
+async def run(screen, cfg: GameConfig, active: List[int]):
     """跑选球界面。`active` 是要玩的屏在 cfg.panels 里的下标，可以被就地改动（切单屏）。
 
     返回 (screen, action)：切单屏时窗口会改尺寸，所以要把新的 surface 还回去。
@@ -248,14 +260,15 @@ def run(screen, cfg: GameConfig, active: List[int]):
     clock = pygame.time.Clock()
     mouse_pos = (0, 0)
     hover_rows: List[Optional[int]] = [None] * len(columns)
-    hover_btn = hover_solo = False
+    hover_btn = hover_solo = hover_start = False
 
     def refresh_hover() -> None:
-        nonlocal hover_btn, hover_solo
+        nonlocal hover_btn, hover_solo, hover_start
         for i, col in enumerate(columns):
             hover_rows[i] = col.row_at(mouse_pos)
         hover_btn = T.in_rect(mouse_pos, edit_button_rect(width, height))
         hover_solo = T.in_rect(mouse_pos, solo_button_rect(width, height))
+        hover_start = T.in_rect(mouse_pos, start_button_rect(width, height))
 
     def rebuild() -> None:
         """列数变了（切单/双屏）或者窗口尺寸变了，重算一遍。"""
@@ -299,6 +312,8 @@ def run(screen, cfg: GameConfig, active: List[int]):
                 if hover_solo:
                     toggle_solo()
                     continue
+                if hover_start:
+                    return screen, ("play", [c.current for c in columns])
                 for i, col in enumerate(columns):
                     idx = col.row_at(e.pos)
                     if idx is not None and col.selectable:
@@ -329,6 +344,8 @@ def run(screen, cfg: GameConfig, active: List[int]):
                 refresh_hover()
 
         draw_frame(screen, columns, active_col, width, height,
-                   mouse_pos, hover_rows, hover_btn, hover_solo, solo=len(active) == 1)
+                   mouse_pos, hover_rows, hover_btn, hover_solo, hover_start,
+                   solo=len(active) == 1)
         pygame.display.flip()
         clock.tick(cfg.glob.fps)
+        await asyncio.sleep(0)      # pygbag 必需：每帧让出控制权

@@ -6,8 +6,20 @@ import os
 
 import pygame
 
-# 优先用这几个字体，中文能正常显示。找不到就退回到 pygame 默认字体。
-_FONT_CANDIDATES = [
+import paths
+
+# ★ 优先用"跟程序放在一起"的字体。
+#   网页版（pygbag）和打包成 exe 之后，系统字体路径是不存在的 ——
+#   浏览器里没有 C:\Windows\Fonts，所以必须把字体文件打进包里一起发。
+#   想换字体：把一个 .ttf/.ttc 放到程序旁边，改这里的文件名即可。
+_BUNDLED_CANDIDATES = [
+    "simhei.ttf",        # 黑体（9.3MB，覆盖全部常用汉字）
+    "font.ttf",
+    "msyh.ttc",
+]
+
+# 找不到打包字体时才退回系统字体（开发时用）
+_SYSTEM_CANDIDATES = [
     r"C:\Windows\Fonts\msyh.ttc",        # 微软雅黑
     r"C:\Windows\Fonts\msyhbd.ttc",
     r"C:\Windows\Fonts\simhei.ttf",      # 黑体
@@ -27,10 +39,18 @@ def _resolve_font_path():
     global _font_path, _font_path_ready
     if _font_path_ready:
         return _font_path
-    for path in _FONT_CANDIDATES:
-        if os.path.exists(path):
-            _font_path = path
+
+    for name in _BUNDLED_CANDIDATES:
+        p = paths.find_file(name)
+        if os.path.exists(p):
+            _font_path = p
             break
+    else:
+        for path in _SYSTEM_CANDIDATES:
+            if os.path.exists(path):
+                _font_path = path
+                break
+
     _font_path_ready = True
     return _font_path
 
