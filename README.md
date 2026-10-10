@@ -296,7 +296,55 @@ bignum 的显示规则：十进制位数小于 10 就完整写（`1600000000`）
 比如 `1E10000 - 1` 还是 `1E10000`（差得太远，40 位精度里看不见）。这不是 bug，
 这正是"对数球"存在的意义 —— 先把数字拉下来，再慢慢磨。
 
-## 打包分享给别人
+## 打安卓 APK（自己构建）
+
+**流程一句话：改代码 → `git push github master` → 等 13 分钟 → 去 Actions 下载。**
+
+```bash
+cd "E:/Program Files (x86)/python project/project/game"
+
+# 想先在本机看效果
+.venv\Scripts\python.exe main.py
+
+# 提交推送到 GitHub（必须是 github 这个远程，origin 是 Gitee，推它不会触发构建）
+git add .
+git commit -m "说明改了什么"
+git push github master
+```
+
+然后打开 **https://github.com/store-ick/ball/actions**：
+
+1. 构建**自动开始**，约 **13 分钟**（页面会自动刷新）
+2. 等它变成绿色 ✅
+3. 进那一次构建的页面 → **拉到最底部** → `Artifacts` → 点 **`ballgame-apk`**
+4. 下载的是 zip，**解压**后里面是 `.apk`，传到手机装
+
+### 要注意的
+
+| | |
+| --- | --- |
+| **改任何东西都要重新构建** | 代码**和**配置文件（`game.toml` / `balls.toml`）都打进 APK 里了 |
+| **只有推 master 才触发** | 推别的分支不会 |
+| **失败了不用重新推** | 在那次构建页面点右上角 **`Re-run jobs`** |
+| **手动触发** | Actions 页面左边选「构建 APK」→ 右边 **`Run workflow`** |
+| **首次构建特别久** | 要下 2GB 的 NDK 并编译整个 Python，30~60 分钟；之后有缓存 |
+
+### 手机上调试
+
+`adb` 放在 `E:\adb\platform-tools\adb.exe`（手机要先开 USB 调试并授权）。
+
+```bash
+E:\adb\platform-tools\adb.exe devices                 # 看手机连上没有
+E:\adb\platform-tools\adb.exe logcat -c               # 清空日志
+E:\adb\platform-tools\adb.exe shell monkey -p com.stoneick.ballgame -c android.intent.category.LAUNCHER 1
+E:\adb\platform-tools\adb.exe logcat -d               # 把日志拉出来看
+```
+
+闪退最常见的原因是 **Python 版本差异**（安卓那边被 pygame 的 recipe 钉在 **3.10**，
+桌面上用的是 3.12/3.13）—— 比如 `tomllib` 就是 3.11 才进标准库的，
+安卓上得退回 `tomli`。写代码时注意别用太新的标准库功能。
+
+## 打包分享给别人（Windows exe）
 
 打包配方在 **`ballgame.spec`** 里，一条命令就够：
 
