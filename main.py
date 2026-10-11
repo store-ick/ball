@@ -22,6 +22,7 @@ import pygame
 import bar_editor
 import bignum
 import config as config_mod
+import juice
 import paths
 import render
 import select_screen
@@ -169,8 +170,11 @@ async def play_one_round(screen, game_cfg, clock, active) -> str:
         if screen.get_size() != size:
             size = relayout_panels(screen, game_cfg, panels)
 
+        # 受击反馈的"冻结"：打空一根横杠时全场顿一下（约 60ms）
+        juice.advance(dt)
+
         # 只要有一屏打完就整个暂停，等按 R 重开
-        if not any(p.finished for p in panels):
+        if not juice.frozen() and not any(p.finished for p in panels):
             elapsed += dt
             for panel in panels:
                 panel.update(dt, elapsed)

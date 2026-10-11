@@ -24,6 +24,8 @@ class Bar:
         self.height = float(height)
         # 挂在这根横杠上的持续伤害（中毒、燃烧…），见 dots.py
         self.dots: list = []
+        # 受击震颤还剩多久（纯视觉，见 juice.py）
+        self.shake = 0.0
 
     @property
     def bottom(self) -> float:
@@ -59,6 +61,7 @@ class Ball:
         self.vx = 0.0
         self.vy = 0.0
         self.first_bounce = True        # 还没弹过 -> 开局竖直下落
+        self.squash = 0.0               # 撞到横杠时的压扁计时（纯视觉，见 juice.py）
 
         # 窗口缩放系数，由所属的 Panel 维护：
         #   scale_y 乘在重力和反弹力度上，scale_x 乘在横向速度上。

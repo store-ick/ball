@@ -20,6 +20,7 @@ import pygame
 
 import bignum
 import dots
+import juice
 import effects
 import render
 import theme
@@ -35,6 +36,7 @@ class Panel:
         radius = cfg.ball.radius or glob.ball_radius
         self.ball = Ball(cfg.ball, radius, glob.randomness)
         self.bars = []
+        self.shards = []            # 被打空的横杠裂出来的碎块（纯视觉）
 
         self.finished = False
         self.finished_at = None
@@ -49,6 +51,7 @@ class Panel:
         self.finished = False
         self.finished_at = None
         self.hits = 0
+        self.shards = []
 
         self.bars = [
             Bar(hp, 0.0, self.glob.bar_height, row=i)
@@ -149,7 +152,9 @@ class Panel:
         if self.finished:
             return
 
-        # 先结算持续伤害（中毒、燃烧…）—— 它们按"每秒"走，跟撞击无关
+        # 受击反馈（震颤 / 压扁 / 碎块）—— 纯视觉，先推进
+        self._tick_juice(dt)
+        # 再结算持续伤害（中毒、燃烧…）—— 它们按"每秒"走，跟撞击无关
         self._tick_dots(dt)
         if self.finished:
             return
@@ -172,6 +177,16 @@ class Panel:
 
         if self.finished and self.finished_at is None:
             self.finished_at = elapsed
+
+    def _tick_juice(self, dt: float):
+        """推进受击反馈：横杠震颤、球压扁、碎块。纯视觉，不碰物理。"""
+        if self.ball.squash > 0:
+            self.ball.squash = max(0.0, self.ball.squash - dt)
+        for bar in self.bars:
+            if bar.shake > 0:
+                bar.shake = max(0.0, bar.shake - dt)
+        if self.shards:
+            self.shards = [s for s in self.shards if s.update(dt)]
 
     def _tick_dots(self, dt: float):
         """结算挂在横杠上的持续效果（中毒 / 燃烧…）。
@@ -234,6 +249,9 @@ class Panel:
     def _hit(self, bar: Bar, ball: Ball):
         """球砸到横杠：先结算本次伤害，再触发球的能力。"""
         self.hits += 1
+        # 受击反馈：横杠抖一下、球压扁一下
+        bar.shake = juice.SHAKE_TIME
+        ball.squash = juice.SQUASH_TIME
         # 数字只精确到整数，但两边方向不同：
         #   伤害是增益 -> 向上取整，免得 ×0.5 把球归零
         #   横杠血量是目标 -> 向下取整，免得出现"显示 0 却还活着"
@@ -249,6 +267,11 @@ class Panel:
 
         if not bar.alive:
             bar.hp = bignum.ZERO
+            # 击破反馈：全场顿一下 + 横杠裂成几块飞出去
+            juice.freeze()
+            self.shards.extend(
+                juice.make_shards(self.x, bar.y, self.w, bar.height)
+            )
             try:
                 self.bars.remove(bar)
             except ValueError:
@@ -265,14 +288,23 @@ class Panel:
             self._draw_bar(surface, bar)
 
         # 球
+        # 碎块画在横杠之后，这样它们会盖在别的横杠上面飞
+        for shard in self.shards:
+            shard.draw(surface)
+
+        # 球（撞到横杠那一刻会被压扁，见 juice.py）
         ball = self.ball
         if not self.finished:
             cx, cy, r = int(ball.x), int(ball.y), int(ball.radius)
-            pygame.draw.circle(surface, ball.color, (cx, cy), r)
-            pygame.draw.circle(surface, theme.INK, (cx, cy), r, 2)
+            sx, sy = juice.squash_scale(ball.squash)
+            rx = max(3, int(r * sx))
+            ry = max(3, int(r * sy))
+            box = (cx - rx, cy - ry, rx * 2, ry * 2)
+            pygame.draw.ellipse(surface, ball.color, box)
+            pygame.draw.ellipse(surface, theme.INK, box, 2)
             label = bignum.fmt(ball.damage)
             if len(label) <= 4:
-                render.draw_text(surface, label, size=int(r * 1.1),
+                render.draw_text(surface, label, size=max(8, int(ry * 1.1)),
                                  color=theme.PAPER, center=(cx, cy))
 
         # 顶部信息：左边球名 + 描述，右边当前伤害
@@ -281,6 +313,9 @@ class Panel:
     def _draw_bar(self, surface, bar: Bar):
         """画一根横杠：黑条 = 血条，掉血时从右往左褪成浅灰。"""
         x, y, w, h = int(self.x), int(bar.y), int(self.w), int(bar.height)
+        # 受击震颤：整条横杠连着上面的数字一起左右偏一点
+        if bar.shake > 0:
+            x += int(juice.shake_offset(bar.shake))
 
         # 黑色占多宽 = 当前血量 / 满格血量（满格就是这根横杠出生时的血量）
         frac = 0.0
