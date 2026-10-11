@@ -279,13 +279,38 @@ class Panel:
         self._draw_header(surface)
 
     def _draw_bar(self, surface, bar: Bar):
-        rect = (int(self.x), int(bar.y), int(self.w), int(bar.height))
-        pygame.draw.rect(surface, theme.INK, rect)
+        """画一根横杠：黑条 = 血条，掉血时从右往左褪成浅灰。"""
+        x, y, w, h = int(self.x), int(bar.y), int(self.w), int(bar.height)
 
+        # 黑色占多宽 = 当前血量 / 满格血量（满格就是这根横杠出生时的血量）
+        frac = 0.0
+        if bar.max_hp > 0:
+            frac = float(bar.hp / bar.max_hp)
+        frac = min(max(frac, 0.0), 1.0)
+        fill_w = int(round(w * frac))
+
+        # 先铺满浅灰（褪掉后的底色），再把左边那截盖成黑色 —— 所以是"从右往左褪"
+        pygame.draw.rect(surface, theme.RULE, (x, y, w, h))
+        if fill_w > 0:
+            pygame.draw.rect(surface, theme.INK, (x, y, fill_w, h))
+
+        # 数字固定画在整条横杠的正中间。颜色按"中间那块是黑是灰"来定，
+        # 不然黑色太少的时候白字会糊在浅灰上看不见。
         label = bignum.fmt(bar.hp)
         size = render.fit_size(label, int(self.w * 0.86), int(self.glob.bar_height * 1.15))
-        render.draw_text(surface, label, size=size, color=theme.PAPER,
-                         center=(int(self.x + self.w / 2), int(bar.y + bar.height / 2)))
+        cx, cy = x + w // 2, y + h // 2
+        main_color = theme.PAPER if fill_w >= w // 2 else theme.INK
+
+        # 文字正好骑在黑白分界上的时候（比如血量刚好一半），一半会看不见。
+        # 这种情况补一圈反色描边。只在骑线时做，平时不浪费渲染。
+        text_w = render.text_size(label, size)[0] // 2
+        if abs(fill_w - w // 2) < text_w:
+            halo = theme.INK if main_color == theme.PAPER else theme.PAPER
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                render.draw_text(surface, label, size=size, color=halo,
+                                 center=(cx + dx, cy + dy))
+
+        render.draw_text(surface, label, size=size, color=main_color, center=(cx, cy))
 
     def _draw_header(self, surface):
         pad = 16
