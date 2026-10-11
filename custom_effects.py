@@ -60,3 +60,13 @@ def parity_chaos(ctx, **kw):
 def double(ctx, times=1, **kw):       # ← 想要参数就加在这
       for _ in range(int(times)):
           ctx.ball.damage *= 2
+
+#-------------------------------------------------------------------------------
+#二向箔球
+#-------------------------------------------------------------------------------
+@register("二向箔")
+def flatten(ctx, **kw):
+    hp = ctx.bar.hp
+    if hp > 0:
+        # adjusted() = floor(log10(hp))，所以位数 = adjusted + 1
+        ctx.bar.hp = bignum.parse(hp.adjusted() + 1)

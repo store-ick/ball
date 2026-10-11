@@ -19,6 +19,7 @@ import random
 import pygame
 
 import bignum
+import dots
 import effects
 import render
 import theme
@@ -148,6 +149,11 @@ class Panel:
         if self.finished:
             return
 
+        # 先结算持续伤害（中毒、燃烧…）—— 它们按"每秒"走，跟撞击无关
+        self._tick_dots(dt)
+        if self.finished:
+            return
+
         ball = self.ball
         # 重力也带上窗口缩放系数：窗口变高，重力跟着变强，弹跳高度占比才不变
         gravity = self.glob.gravity * ball.gravity_mult * ball.scale_y
@@ -166,6 +172,21 @@ class Panel:
 
         if self.finished and self.finished_at is None:
             self.finished_at = elapsed
+
+    def _tick_dots(self, dt: float):
+        """结算挂在横杠上的持续效果（中毒 / 燃烧…）。
+
+        跟撞击无关，纯按时间走 —— 每攒够 1 秒扣一次血。
+        被毒死的横杠在这里直接拿掉。
+        """
+        if not self.bars:
+            return
+        died = [bar for bar in self.bars if dots.tick_bar(bar, dt)]
+        for bar in died:
+            try:
+                self.bars.remove(bar)
+            except ValueError:
+                pass
 
     def _step(self, ball: Ball, gravity: float, dt: float):
         r = ball.radius
@@ -219,7 +240,8 @@ class Panel:
         ball.damage = bignum.ceil_int(ball.damage)
         bar.hp -= ball.damage
 
-        ctx = effects.EffectContext(ball=ball, bar=bar, panel=self)
+        ctx = effects.EffectContext(ball=ball, bar=bar, panel=self,
+                                    dealt=bignum.floor_int(ball.damage))
         effects.apply_all(ball.ops, ctx)
 
         bar.hp = bignum.floor_int(bar.hp)

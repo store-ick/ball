@@ -22,6 +22,8 @@ class Bar:
         self.row = int(row)
         self.y = float(y)
         self.height = float(height)
+        # 挂在这根横杠上的持续伤害（中毒、燃烧…），见 dots.py
+        self.dots: list = []
 
     @property
     def bottom(self) -> float:

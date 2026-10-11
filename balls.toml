@@ -119,3 +119,80 @@ speed_x      = 300
 color        = [120, 120, 120]
 on_hit = [{ op = "set_gravity_mult", value = 0.0 },
           { op = "add_damage", value = 1 }]
+
+#二向箔球
+[[ball]]
+name         = "二向箔球"
+desc         = "把横杠压成它的位数。1E10000 → 10001。"
+base_damage  = 3
+bounce_speed = 620
+speed_x      = 260
+color        = [180, 180, 255]
+on_hit = [{ op = "二向箔" }]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  下面这些用了新加的算子
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── 阶乘球 ──
+# factorial：攻击力换成它的阶乘。小数字算精确值，大数字走对数空间
+#（720! 已经是 1747 位数，再阶乘一次是 10^(1.7×10^1749) 那种量级）。
+[[ball]]
+name         = "阶乘球"
+desc         = "每次撞击，攻击力变成它的阶乘。3 → 6 → 720 → 天文数字。"
+base_damage  = 3
+bounce_speed = 620
+speed_x      = 220
+color        = [200, 120, 40]
+on_hit = [{ op = "factorial" }]
+
+
+# ── 中毒球 ──
+# dot：给横杠挂持续伤害，每秒结算一次，同名的叠层数。
+# 这里 = 每秒扣「层数% × 当前血量 + 1」。那个 +1 很关键 ——
+# 纯百分比伤害永远打不死（只会无限趋近 0）。
+[[ball]]
+name         = "中毒球"
+desc         = "每撞一次挂一层中毒。中毒每秒扣「层数%当前血量 + 1」。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [110, 190, 70]
+on_hit = [{ op = "dot", name = "中毒", base = 1, percent = 1 }]
+
+
+# ── 吸血球 ──
+# drain：打掉多少血，就加到自己攻击力上（守恒球）
+[[ball]]
+name         = "吸血球"
+desc         = "打掉多少血就加到自己身上。越打越强。"
+base_damage  = 1
+bounce_speed = 620
+speed_x      = 220
+color        = [150, 30, 60]
+on_hit = [{ op = "drain", value = 1.0 }]
+
+
+# ── 平方球 ──
+# square_damage：攻击力自乘。比阶乘温和得多
+[[ball]]
+name         = "平方球"
+desc         = "每次撞击，攻击力自乘。3 → 9 → 81 → 6561 → …"
+base_damage  = 3
+bounce_speed = 620
+speed_x      = 220
+color        = [60, 90, 200]
+on_hit = [{ op = "square_damage" }]
+
+
+# ── 蹦极球 ──
+# 超弹 + 超重：高频小碎步，砸得非常密
+[[ball]]
+name         = "蹦极球"
+desc         = "超弹加超重，高频小碎步，砸得非常密。"
+base_damage  = 1
+bounce_speed = 1600
+speed_x      = 220
+color        = [220, 90, 30]
+on_hit = [{ op = "set_gravity_mult", value = 3.0 }]
